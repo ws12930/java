@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>死神 VS 火影 · 忍界手记</title>
+<style>
+  :root {
+    --bleach: #2ee6ff;      /* 死神·灵力青 */
+    --bleach-deep: #0a1a2f;
+    --naruto: #ff7b1a;      /* 火影·查克拉橙 */
+    --naruto-deep: #2a0a05;
+    --accent: var(--bleach);
+    --accent2: var(--naruto);
+    --text: #f5f7fa;
+    --text-sub: #aeb8c4;
+    --error: #ff4d5e;
+    --ok: #38e07a;
+    --glass: rgba(16, 20, 32, 0.55);
+
+    /* 立绘外发光参数：颜色 / 强度 / 边缘柔和范围 */
+    --ichigo-glow: 46,230,255;   /* 死神·灵压青 RGB */
+    --naruto-glow: 255,123,26;   /* 火影·查克拉橙 RGB */
+    --glow-soft-blur: 18px;      /* 基础柔和边缘 */
+    --glow-soft-alpha: .50;      /* 基础发光强度 */
+    --glow-mid-blur: 34px;       /* 中层晕染边缘 */
+    --glow-mid-alpha: .28;        /* 中层晕染强度 */
+    --glow-active-blur: 42px;    /* 选中角色峰值外缘 */
+    --glow-active-alpha: .90;    /* 选中角色峰值强度 */
+    --glow-breathe: 2.8s;         /* 脉动周期 */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    color: var(--text);
+    background: #05070d;
+    min-height: 100vh;
+  }
+
+  /* ---------- 动态背景 ---------- */
+  #bg { position: fixed; inset: 0; z-index: 0; display: block; }
+
+  .vignette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        radial-gradient(120% 80% at 100% 50%, rgba(255,123,26,0.14), transparent 55%),
+        radial-gradient(100% 100% at 50% 50%, transparent 40%, rgba(0,0,0,0.55) 100%);
+  }
+
+  /* ---------- 螺旋丸能量球（锚定于鸣人手部，随攻击节拍增亮） ---------- */
+  .rasang-anchor {
+    position: absolute; z-index: 2;
+    /* 基于 naruto_cut.png 像素分析：手部查克拉重心约 (34%, 24.5%) */
+    left: 34%; top: 24.5%;
+    width: 26%; aspect-ratio: 1 / 1;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    filter: brightness(var(--ras-beat, 1));
+  }
+  .rasang {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%,
+      #ffffff 0%, #e3f2ff 16%, #8fc8ff 40%,
+      rgba(58,160,255,0.5) 70%, rgba(58,160,255,0) 100%);
+    box-shadow: 0 0 5vh rgba(58,160,255,0.5), inset 0 0 2.4vh rgba(255,255,255,0.45);
+    animation: rasBreathe 2.6s ease-in-out infinite;
+  }
+  @keyframes rasBreathe {
+    0%,100% { transform: scale(0.92); }
+    50% { transform: scale(1.09); }
+  }
+  .ras-ring {
+    position: absolute; inset: -7%; border-radius: 50%;
+    border: 2px solid rgba(191,227,255,0.6);
+    border-top-color: rgba(255,255,255,0.95);
+    border-right-color: rgba(140,200,255,0.35);
+    animation: rasSpin 3.4s linear infinite;
+  }
+  .ras-ring.r2 {
+    inset: 9%; border-style: dashed; opacity: 0.7;
+    animation: rasSpin 2.3s linear infinite reverse;
+  }
+  @keyframes rasSpin { to { transform: rotate(360deg); } }
+  @media (max-width: 640px) {
+    .rasang-anchor { display: none; }
+  }
+
+  /* ---------- 阵营光环（跟随主题色脉动，纯CSS，无需立绘） ---------- */
+  .aura {
+    position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    width: 540px; max-width: 92%; height: 380px;
+    z-index: -1; pointer-events: none;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 38%, transparent), transparent 72%);
+    filter: blur(22px); opacity: .8;
+    animation: auraPulse 4.2s ease-in-out infinite;
+  }
+  @keyframes auraPulse {
+    0%,100% { opacity: .5; transform: translateX(-50%) scale(1); }
+    50% { opacity: .9; transform: translateX(-50%) scale(1.06); }
+  }
+
+  /* ---------- 角色立绘（左右侧边，所有可选人物均带外发光） ---------- */
+  .hero {
+    position: fixed; bottom: -16%; z-index: 2;
+    pointer-events: auto;
+    display: block; max-height: 112vh;
+    animation: heroFloat 7s ease-in-out infinite;
+    transition: bottom .35s ease;
+  }
+  .hero-left { left: 1%; transform-origin: bottom center; }
+  .hero-right { right: 1%; transform-origin: bottom center; animation-name: heroFloatR; }
+  .hero:hover { bottom: -14%; }
+  @keyframes heroFloat {
+    0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); }
+  }
+  @keyframes heroFloatR {
+    0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); }
+  }
+
+  .hero-img {
+    display: block; height: auto; width: auto;
+    max-height: 112vh; max-width: 42vw;
+    object-fit: contain; object-position: bottom center;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 90%, transparent 100%);
+    /* 基础外发光：颜色 / 强度 / 边缘柔和范围（见 :root 变量） */
+    filter:
+      drop-shadow(0 0 var(--glow-soft-blur) rgba(var(--ichigo-glow), var(--glow-soft-alpha)))
+      drop-shadow(0 0 var(--glow-mid-blur) rgba(var(--ichigo-glow), var(--glow-mid-alpha)))
+      drop-shadow(0 0 30px rgba(0,0,0,0.6))
+      brightness(1.03) saturate(1.04);
+    transition: filter .35s ease;
+  }
+  .hero-right .hero-img {
+    /* 鸣人固定使用查克拉橙色发光 */
+    filter:
+      drop-shadow(0 0 var(--glow-soft-blur) rgba(var(--naruto-glow), var(--glow-soft-alpha)))
+      drop-shadow(0 0 var(--glow-mid-blur) rgba(var(--naruto-glow), var(--glow-mid-alpha)))
+      drop-shadow(0 0 30px rgba(0,0,0,0.6))
+      brightness(1.03) saturate(1.04);
+  }
+  .hero-left:hover .hero-img,
+  .hero-right:hover .hero-img {
+    filter:
+      drop-shadow(0 0 24px rgba(var(--ichigo-glow), .62))
+      drop-shadow(0 0 46px rgba(var(--ichigo-glow), .35))
+      drop-shadow(0 0 30px rgba(0,0,0,0.45))
+      brightness(1.08) saturate(1.12);
+  }
+  .hero-right:hover .hero-img {
+    filter:
+      drop-shadow(0 0 24px rgba(var(--naruto-glow), .62))
+      drop-shadow(0 0 46px rgba(var(--naruto-glow), .35))
+      drop-shadow(0 0 30px rgba(0,0,0,0.45))
+      brightness(1.08) saturate(1.12);
+  }
+
+  /* 选中阵营时：叠加高强度脉动外发光 */
+  .hero-img.glow-ichigo { animation: heroGlowI var(--glow-breathe) ease-in-out infinite; }
+  .hero-img.glow-naruto { animation: heroGlowN var(--glow-breathe) ease-in-out infinite; }
+  @keyframes heroGlowI {
+    0%,100% { filter:
+      drop-shadow(0 0 26px rgba(var(--ichigo-glow), .65))
+      drop-shadow(0 0 var(--glow-active-blur) rgba(var(--ichigo-glow), .55))
+      drop-shadow(0 0 30px rgba(0,0,0,0.6))
+      brightness(1.04) saturate(1.08); }
+    50%     { filter:
+      drop-shadow(0 0 30px rgba(var(--ichigo-glow), .85))
+      drop-shadow(0 0 54px rgba(var(--ichigo-glow), .78))
+      drop-shadow(0 0 30px rgba(0,0,0,0.6))
+      brightness(1.12) saturate(1.18); }
+  }
+  @keyframes heroGlowN {
+    0%,100% { filter:
+      drop-shadow(0 0 26px rgba(var(--naruto-glow), .65))
+      drop-shadow(0 0 var(--glow-active-blur) rgba(var(--naruto-glow), .55))
+      drop-shadow(0 0 30px rgba(0,0,0,0.6))
+      brightness(1.04) saturate(1.08); }
+    50%     { filter:
+      drop-shadow(0 0 30px rgba(var(--naruto-glow), .85))
+      drop-shadow(0 0 54px rgba(var(--naruto-glow), .78))
+      drop-shadow(0 0 30px rgba(0,0,0,0.6))
+      brightness(1.12) saturate(1.18); }
+  }
+
+  @media (max-width: 960px) {
+    .hero { max-height: 88vh; opacity: 0.75; }
+    .hero-img { max-height: 88vh; }
+    .rasang-anchor { width: 22%; }
+  }
+  @media (max-width: 640px) {
+    .hero { display: none; }
+    .rasang-anchor { display: none; }
+  }
+
+  /* ---------- 居中舞台 ---------- */
+  .stage {
+    position: relative; z-index: 3;
+    max-width: 760px; margin: 0 auto;
+    padding: 28px 18px 60px;
+  }
+
+  .card {
+    width: 100%;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 18px;
+    padding: 34px 30px 30px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5),
+                0 0 0 1px rgba(255,255,255,0.04) inset,
+                0 0 46px color-mix(in srgb, var(--accent) 20%, transparent);
+    position: relative;
+    overflow: hidden;
+    animation: cardIn .8s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), transparent 30%);
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
+
+  /* ---------- 标题 / 阵营 ---------- */
+  .title {
+    text-align: center; margin-bottom: 6px;
+    font-size: 26px; font-weight: 800; letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--bleach), #fff 35%, var(--naruto), #fff 70%, var(--bleach));
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 2px 10px rgba(46,230,255,.25));
+    animation: titleFlame 4.2s linear infinite;
+  }
+  @keyframes titleFlame {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+  .subtitle { text-align: center; font-size: 12.5px; color: var(--text-sub); margin-bottom: 22px; letter-spacing: 1px; }
+
+  .faction { display: flex; gap: 10px; margin-bottom: 22px; }
+  .faction .chip {
+    flex: 1; text-align: center; cursor: pointer;
+    padding: 9px 0; border-radius: 10px; font-size: 13px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.14); color: var(--text-sub);
+    background: rgba(255,255,255,0.03);
+    transition: all .25s ease; user-select: none;
+    position: relative; overflow: hidden;
+  }
+  .faction .chip .ic { font-size: 15px; margin-right: 5px; }
+  .faction .chip.active.bleach {
+    color: #eafdff; border-color: var(--bleach);
+    background: linear-gradient(180deg, rgba(46,230,255,.22), rgba(46,230,255,.05));
+    box-shadow: 0 0 18px rgba(46,230,255,.35);
+  }
+  .faction .chip.active.naruto {
+    color: #fff3e8; border-color: var(--naruto);
+    background: linear-gradient(180deg, rgba(255,123,26,.22), rgba(255,123,26,.05));
+    box-shadow: 0 0 18px rgba(255,123,26,.35);
+  }
+
+  /* ---------- 输入框 ---------- */
+  .field { margin-bottom: 16px; position: relative; }
+  .input-wrap {
+    display: flex; align-items: center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 11px; overflow: hidden;
+    transition: border-color .25s, box-shadow .25s, background .25s;
+  }
+  .input-wrap .pre {
+    width: 44px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-sub); transition: color .25s; flex: 0 0 auto;
+  }
+  .input-wrap input, .input-wrap textarea {
+    flex: 1; border: none; outline: none; background: transparent;
+    color: var(--text); font-size: 15px; padding: 14px 12px 14px 0;
+    letter-spacing: .5px; font-family: inherit; resize: none; width: 100%;
+  }
+  .input-wrap textarea { padding: 14px 12px; line-height: 1.6; min-height: 120px; }
+  .input-wrap input::placeholder, .input-wrap textarea::placeholder { color: #6f7a88; }
+  .input-wrap .suf {
+    width: 40px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-sub); cursor: pointer; flex: 0 0 auto;
+  }
+  .input-wrap .suf:hover { color: var(--accent); }
+
+  .input-wrap.focus {
+    border-color: var(--accent);
+    background: rgba(255,255,255,0.07);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .input-wrap.focus .pre { color: var(--accent); }
+  .input-wrap::after {
+    content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .35s ease;
+  }
+  .input-wrap.focus::after { width: 100%; }
+
+  .input-wrap.error { border-color: var(--error); box-shadow: 0 0 0 3px rgba(255,77,94,.18); }
+  .field.shake { animation: shake .4s; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); } 40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); } 80% { transform: translateX(3px); }
+  }
+  .err-msg {
+    font-size: 12px; color: var(--error); margin-top: 6px; min-height: 15px;
+    opacity: 0; transform: translateY(-3px); transition: opacity .2s, transform .2s;
+  }
+  .err-msg.show { opacity: 1; transform: none; }
+
+  /* ---------- 发布按钮 ---------- */
+  .btn-post {
+    width: 100%; margin-top: 8px; position: relative; overflow: hidden;
+    border: none; cursor: pointer; color: #07121a; font-weight: 800;
+    font-size: 16px; letter-spacing: 3px; padding: 15px;
+    border-radius: 11px;
+    background: linear-gradient(90deg, var(--bleach), #8fd9ff 45%, var(--naruto));
+    background-size: 200% 100%; background-position: 0% 0%;
+    box-shadow: 0 8px 26px rgba(46,230,255,.25), 0 8px 26px rgba(255,123,26,.18);
+    transition: transform .12s, box-shadow .25s, background-position .5s;
+  }
+  .btn-post:hover {
+    background-position: 100% 0%;
+    box-shadow: 0 10px 34px rgba(46,230,255,.4), 0 10px 34px rgba(255,123,26,.3);
+  }
+  .btn-post:active { transform: scale(.985); }
+  .btn-post:disabled { opacity: .7; cursor: progress; }
+  .btn-post .ripple {
+    position: absolute; border-radius: 50%; transform: scale(0);
+    background: rgba(255,255,255,.5); animation: ripple .6s ease-out; pointer-events: none;
+  }
+  @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+  .spinner {
+    width: 17px; height: 17px; border: 2px solid rgba(7,18,26,.35);
+    border-top-color: #07121a; border-radius: 50%;
+    animation: spin .7s linear infinite; display: none; vertical-align: middle;
+    margin-right: 8px;
+  }
+  .btn-post.loading .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- 文章列表 ---------- */
+  .feed-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 34px 4px 14px;
+  }
+  .feed-title {
+    font-size: 17px; font-weight: 700; letter-spacing: 1px;
+    color: var(--text);
+  }
+  .feed-count {
+    font-size: 12px; color: var(--text-sub);
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    padding: 4px 10px; border-radius: 20px;
+  }
+  .btn-clear {
+    font-size: 12px; color: var(--text-sub); cursor: pointer;
+    background: rgba(255,77,94,0.08); border: 1px solid rgba(255,77,94,0.25);
+    padding: 4px 10px; border-radius: 20px; transition: all .2s;
+  }
+  .btn-clear:hover { color: #fff; background: rgba(255,77,94,0.22); }
+
+  .post {
+    background: var(--glass);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    position: relative;
+    animation: postIn .5s ease both;
+  }
+  @keyframes postIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .post-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .post-title { font-size: 17px; font-weight: 700; color: #fff; flex: 1; min-width: 160px; }
+  .badge {
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+  }
+  .badge.bleach { color: #eafdff; background: rgba(46,230,255,.18); border: 1px solid rgba(46,230,255,.4); }
+  .badge.naruto { color: #fff3e8; background: rgba(255,123,26,.18); border: 1px solid rgba(255,123,26,.4); }
+  .post-meta { font-size: 12px; color: var(--text-sub); margin-bottom: 8px; }
+  .post-meta b { color: var(--text); font-weight: 600; }
+  .post-body {
+    font-size: 14.5px; line-height: 1.7; color: #dfe6ee; white-space: pre-wrap; word-break: break-word;
+  }
+  .post-del {
+    position: absolute; top: 14px; right: 14px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-sub); cursor: pointer;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+    transition: all .2s; font-size: 14px;
+  }
+  .post-del:hover { color: #fff; background: rgba(255,77,94,0.3); border-color: rgba(255,77,94,0.5); }
+
+  .empty {
+    text-align: center; color: var(--text-sub); font-size: 14px;
+    padding: 40px 20px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px;
+  }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed; top: 26px; left: 50%; z-index: 50;
+    transform: translateX(-50%) translateY(-20px); opacity: 0;
+    background: rgba(20,26,38,.92); color: #fff; padding: 12px 22px;
+    border-radius: 10px; font-size: 14px; border-left: 4px solid var(--bleach);
+    box-shadow: 0 10px 34px rgba(0,0,0,.4); transition: opacity .3s, transform .3s;
+    display: flex; align-items: center; gap: 10px; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { border-left-color: var(--error); }
+  .toast.ok { border-left-color: var(--ok); }
+
+  @media (max-width: 480px) {
+    .card { padding: 26px 18px 24px; border-radius: 16px; }
+    .title { font-size: 22px; }
+    .stage { padding: 18px 12px 50px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .post, .title, .aura, .rasang, .ras-ring, .ras-ring.r2, .hero, .hero-img.glow-ichigo, .hero-img.glow-naruto { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <div class="vignette"></div>
+
+  <!-- 角色立绘：一护（左下）与鸣人（右下），所有人物均带阵营色外发光 -->
+  <div class="hero hero-left" id="ichigoHero">
+    <img class="hero-img" id="ichigoImg" src="ichigo_cut.png" alt="黑崎一护" />
+  </div>
+  <div class="hero hero-right" id="narutoHero">
+    <img class="hero-img" id="narutoImg" src="naruto_cut.png" alt="漩涡鸣人" />
+    <!-- 螺旋丸锚定于鸣人手部查克拉重心 (34%, 24.5%) -->
+    <div class="rasang-anchor" id="rasengan" aria-hidden="true">
+      <div class="rasang">
+        <span class="ras-ring r1"></span>
+        <span class="ras-ring r2"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="aura"></div>
+    <div class="card">
+      <div class="title">死神 VS 火影</div>
+      <div class="subtitle">Soul Society × Hidden Leaf · 忍界手记</div>
+
+      <div class="faction" id="faction">
+        <div class="chip bleach active" data-f="bleach"><span class="ic">⚔</span>护廷十三队</div>
+        <div class="chip naruto" data-f="naruto"><span class="ic">🔥</span>木叶忍者</div>
+      </div>
+
+      <form id="postForm" novalidate>
+        <div class="field" id="field-title">
+          <div class="input-wrap" id="wrap-title">
+            <span class="pre" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16v16H4z"></path><path d="M8 9h8M8 13h6"></path>
+              </svg>
+            </span>
+            <input type="text" id="title" autocomplete="off" placeholder="战报标题（至少 2 字）" maxlength="60" />
+          </div>
+          <div class="err-msg" id="err-title"></div>
+        </div>
+
+        <div class="field" id="field-author">
+          <div class="input-wrap" id="wrap-author">
+            <span class="pre" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path>
+              </svg>
+            </span>
+            <input type="text" id="author" autocomplete="off" placeholder="署名 / 代号（至少 2 字）" maxlength="20" />
+          </div>
+          <div class="err-msg" id="err-author"></div>
+        </div>
+
+        <div class="field" id="field-body">
+          <div class="input-wrap" id="wrap-body" style="align-items:flex-start;">
+            <span class="pre" aria-hidden="true" style="margin-top:14px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 20h16M6 16l9-9 3 3-9 9H6z"></path>
+              </svg>
+            </span>
+            <textarea id="body" placeholder="写下你的灵压感悟或忍道心得……（至少 5 字）" maxlength="2000"></textarea>
+          </div>
+          <div class="err-msg" id="err-body"></div>
+        </div>
+
+        <button type="submit" class="btn-post" id="postBtn">
+          <span class="spinner"></span><span class="btn-text">发 布 战 报</span>
+        </button>
+      </form>
+    </div>
+
+    <div class="feed-head">
+      <div class="feed-title">手记卷轴</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="feed-count" id="count">0 篇</span>
+        <span class="btn-clear" id="clearAll">清空</span>
+      </div>
+    </div>
+    <div id="feed"></div>
+  </div>
+
+  <div class="toast" id="toast"><span id="toastText"></span></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORE_KEY = "tk_posts_v1";
+
+  /* ===================== 阵营切换（同时决定文章阵营 + 角色发光） ===================== */
+  var root = document.documentElement;
+  var factionEl = document.getElementById("faction");
+  var currentFaction = "bleach";
+  var heroL = document.getElementById("ichigoImg");   // 黑崎一护立绘
+  var heroR = document.getElementById("narutoImg"); // 漩涡鸣人立绘
+  function syncFactionGlow(f) {
+    heroL.classList.toggle("glow-ichigo", f === "bleach");
+    heroR.classList.toggle("glow-naruto", f === "naruto");
+  }
+  factionEl.addEventListener("click", function (e) {
+    var chip = e.target.closest(".chip");
+    if (!chip) return;
+    currentFaction = chip.getAttribute("data-f");
+    Array.prototype.forEach.call(factionEl.children, function (c) { c.classList.remove("active"); });
+    chip.classList.add("active");
+    if (currentFaction === "bleach") {
+      root.style.setProperty("--accent", "#2ee6ff");
+      root.style.setProperty("--accent2", "#ff7b1a");
+    } else {
+      root.style.setProperty("--accent", "#ff7b1a");
+      root.style.setProperty("--accent2", "#2ee6ff");
+    }
+    syncFactionGlow(currentFaction);
+  });
+  syncFactionGlow("bleach");   // 默认护廷十三队 → 一护发光
+
+  /* ===================== 输入框聚焦动画 ===================== */
+  function bindFocus(wrapId, inputId) {
+    var wrap = document.getElementById(wrapId);
+    var input = document.getElementById(inputId);
+    input.addEventListener("focus", function () { wrap.classList.add("focus"); });
+    input.addEventListener("blur", function () { wrap.classList.remove("focus"); });
+  }
+  bindFocus("wrap-title", "title");
+  bindFocus("wrap-author", "author");
+  bindFocus("wrap-body", "body");
+
+  /* ===================== 校验 ===================== */
+  function valTitle(v) {
+    v = (v || "").trim();
+    if (!v) return "标题不能为空";
+    if (v.length < 2) return "标题至少 2 个字";
+    return "";
+  }
+  function valAuthor(v) {
+    v = (v || "").trim();
+    if (!v) return "请填写署名或代号";
+    if (v.length < 2) return "署名至少 2 个字";
+    return "";
+  }
+  function valBody(v) {
+    v = (v || "").trim();
+    if (!v) return "正文不能为空";
+    if (v.length < 5) return "正文至少 5 个字";
+    return "";
+  }
+  function setErr(fieldId, wrapId, errId, msg) {
+    var wrap = document.getElementById(wrapId);
+    var e = document.getElementById(errId);
+    if (msg) {
+      wrap.classList.add("error");
+      e.textContent = msg; e.classList.add("show");
+      var f = document.getElementById(fieldId);
+      f.classList.add("shake");
+      setTimeout(function () { f.classList.remove("shake"); }, 420);
+      return false;
+    }
+    wrap.classList.remove("error"); e.textContent = ""; e.classList.remove("show");
+    return true;
+  }
+
+  var titleEl = document.getElementById("title");
+  var authorEl = document.getElementById("author");
+  var bodyEl = document.getElementById("body");
+
+  titleEl.addEventListener("input", function () {
+    if (titleEl.value.trim() !== "") setErr("field-title", "wrap-title", "err-title", valTitle(titleEl.value));
+    else setErr("field-title", "wrap-title", "err-title", "");
+  });
+  authorEl.addEventListener("input", function () {
+    if (authorEl.value.trim() !== "") setErr("field-author", "wrap-author", "err-author", valAuthor(authorEl.value));
+    else setErr("field-author", "wrap-author", "err-author", "");
+  });
+  bodyEl.addEventListener("input", function () {
+    if (bodyEl.value.trim() !== "") setErr("field-body", "wrap-body", "err-body", valBody(bodyEl.value));
+    else setErr("field-body", "wrap-body", "err-body", "");
+  });
+
+  /* ===================== Toast ===================== */
+  var toastTimer = null;
+  function toast(msg, type) {
+    var t = document.getElementById("toast");
+    document.getElementById("toastText").textContent = msg;
+    t.className = "toast show" + (type ? " " + type : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = "toast"; }, 2600);
+  }
+
+  /* ===================== 存储与渲染 ===================== */
+  function loadPosts() {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+    } catch (e) { return []; }
+  }
+  function savePosts(posts) {
+    localStorage.setItem(STORE_KEY, JSON.stringify(posts));
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    function p(n) { return n < 10 ? "0" + n : "" + n; }
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+           " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function factionName(f) { return f === "naruto" ? "木叶忍者" : "护廷十三队"; }
+
+  var feedEl = document.getElementById("feed");
+  var countEl = document.getElementById("count");
+
+  function render() {
+    var posts = loadPosts();
+    countEl.textContent = posts.length + " 篇";
+    if (!posts.length) {
+      feedEl.innerHTML = '<div class="empty">暂无手记，发布你的第一篇战报吧。</div>';
+      return;
+    }
+    var html = "";
+    posts.forEach(function (p) {
+      html +=
+        '<div class="post" data-id="' + esc(p.id) + '">' +
+          '<div class="post-del" data-id="' + esc(p.id) + '" title="删除">✕</div>' +
+          '<div class="post-head">' +
+            '<div class="post-title">' + esc(p.title) + '</div>' +
+            '<span class="badge ' + esc(p.faction) + '">' + esc(factionName(p.faction)) + '</span>' +
+          '</div>' +
+          '<div class="post-meta">署名 <b>' + esc(p.author) + '</b> · ' + esc(fmtTime(p.time)) + '</div>' +
+          '<div class="post-body">' + esc(p.body) + '</div>' +
+        '</div>';
+    });
+    feedEl.innerHTML = html;
+  }
+
+  feedEl.addEventListener("click", function (e) {
+    var del = e.target.closest(".post-del");
+    if (!del) return;
+    var id = del.getAttribute("data-id");
+    var posts = loadPosts().filter(function (p) { return String(p.id) !== String(id); });
+    savePosts(posts);
+    render();
+    toast("手记已焚毁", "ok");
+  });
+
+  document.getElementById("clearAll").addEventListener("click", function () {
+    if (!loadPosts().length) { toast("卷轴已是空白", ""); return; }
+    if (!window.confirm("确定清空所有手记？此操作不可恢复。")) return;
+    savePosts([]);
+    render();
+    toast("卷轴已清空", "ok");
+  });
+
+  /* ===================== 发布（含按钮波纹/loading） ===================== */
+  var btn = document.getElementById("postBtn");
+  btn.addEventListener("click", function (e) {
+    var r = e.target.getBoundingClientRect();
+    var rip = document.createElement("span");
+    rip.className = "ripple";
+    var size = Math.max(r.width, r.height);
+    rip.style.width = rip.style.height = size + "px";
+    rip.style.left = (e.clientX - r.left - size / 2) + "px";
+    rip.style.top = (e.clientY - r.top - size / 2) + "px";
+    btn.appendChild(rip);
+    setTimeout(function () { rip.remove(); }, 600);
+  });
+
+  document.getElementById("postForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var okT = setErr("field-title", "wrap-title", "err-title", valTitle(titleEl.value));
+    var okA = setErr("field-author", "wrap-author", "err-author", valAuthor(authorEl.value));
+    var okB = setErr("field-body", "wrap-body", "err-body", valBody(bodyEl.value));
+    if (!okT || !okA || !okB) { toast("请校准你的力量", "error"); return; }
+
+    btn.classList.add("loading"); btn.disabled = true;
+    btn.querySelector(".btn-text").textContent = "汇聚中...";
+    setTimeout(function () {
+      var posts = loadPosts();
+      posts.unshift({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        title: titleEl.value.trim(),
+        author: authorEl.value.trim(),
+        faction: currentFaction,
+        body: bodyEl.value.trim(),
+        time: Date.now()
+      });
+      savePosts(posts);
+      render();
+
+      titleEl.value = ""; authorEl.value = ""; bodyEl.value = "";
+      [["field-title","wrap-title","err-title"],["field-author","wrap-author","err-author"],["field-body","wrap-body","err-body"]]
+        .forEach(function (k) { setErr(k[0], k[1], k[2], ""); });
+
+      btn.classList.remove("loading"); btn.disabled = false;
+      btn.querySelector(".btn-text").textContent = "发 布 战 报";
+      toast("战报已发布！（本地保存）", "ok");
+    }, 700);
+  });
+
+  /* ===================== 动态背景：粒子 + 斩击 + 灵压（氛围增强版） ===================== */
+  var canvas = document.getElementById("bg");
+  var ctx = canvas.getContext("2d");
+  var W, H, DPR, particles = [], slashes = [], ripples = [], swordParticles = [];
+  var rasEl = document.getElementById("rasengan");
+  var isMobile = window.innerWidth < 640;
+
+  var CYCLE = 4200;          // 与 4.2s 攻击主节拍同步
+  var t0 = performance.now();
+  var prevPhase = 0;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.width = Math.floor(window.innerWidth * DPR);
+    H = canvas.height = Math.floor(window.innerHeight * DPR);
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    isMobile = window.innerWidth < 640;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  // 查克拉火焰（橙）自右升起
+  function spawnParticle() {
+    var x = rand(W * 0.55, W);
+    var y = rand(H * 0.45, H * 1.05);
+    particles.push({
+      x: x, y: y,
+      vx: -rand(0.15, 0.5) * DPR,
+      vy: -rand(0.3, 1.1) * DPR,
+      r: rand(1, 3.2) * DPR,
+      life: 1, decay: rand(0.003, 0.009),
+      color: [255, 123, 26], flick: rand(0.6, 1)
+    });
+    if (particles.length > (isMobile ? 70 : 140)) particles.shift();
+  }
+
+  function spawnSlash() {
+    var vertical = Math.random() < 0.5;
+    var y = rand(H * 0.2, H * 0.8);
+    var x = rand(W * 0.2, W * 0.8);
+    slashes.push({
+      x: x, y: y,
+      angle: vertical ? Math.PI / 2 : (Math.random() < 0.5 ? -0.5 : 0.5),
+      len: rand(W * 0.25, W * 0.5),
+      life: 1, decay: 0.035,
+      color: [255, 200, 120]
+    });
+    if (slashes.length > 6) slashes.shift();
+  }
+
+  // 角色攻击触发的定向能量爆发（从一侧向中心喷射）
+  function spawnBurst(side) {
+    var col = side < 0 ? [120, 240, 255] : [255, 170, 60];
+    var ox = side < 0 ? W * 0.30 : W * 0.70;
+    for (var k = 0; k < 9; k++) {
+      var ang = (side < 0 ? 0 : Math.PI) + rand(-0.5, 0.5);
+      var sp = rand(1.2, 3.4) * DPR;
+      particles.push({
+        x: ox + rand(-30, 30) * DPR, y: rand(H * 0.35, H * 0.72),
+        vx: Math.cos(ang) * sp, vy: rand(-0.8, 0.4) * DPR,
+        r: rand(1.2, 3) * DPR, life: 1, decay: rand(0.012, 0.022),
+        color: col, flick: rand(0.7, 1)
+      });
+    }
+    if (particles.length > (isMobile ? 90 : 175)) particles.splice(0, particles.length - (isMobile ? 90 : 175));
+  }
+
+  function spawnRipple(x, y, maxR, col) {
+    ripples.push({ x: x, y: y, r: 10 * DPR, maxR: maxR * DPR, life: 1, decay: 0.017, color: col });
+    if (ripples.length > 10) ripples.shift();
+  }
+
+  // 一护斩月刀身灵压粒子（青）：沿对角线生成，向上攀升
+  function spawnSwordParticle() {
+    var t = Math.random();
+    var bx = W * (0.10 + 0.20 * t);
+    var by = H * (0.54 + 0.34 * t);
+    swordParticles.push({
+      x: bx + (Math.random() - 0.5) * 20 * DPR,
+      y: by + (Math.random() - 0.5) * 16 * DPR,
+      vx: rand(-0.3, 0.3) * DPR,
+      vy: -rand(0.4, 1.1) * DPR,
+      r: rand(1.2, 3.6) * DPR,
+      life: 1, decay: rand(0.008, 0.02),
+      color: [46, 230, 255], flick: rand(0.7, 1)
+    });
+    if (swordParticles.length > (isMobile ? 22 : 45)) swordParticles.shift();
+  }
+
+  // 攻击节拍包络：相位 0.66 处为斩月/螺旋丸/中央对撞的同步爆发点
+  function beatEnv(phase) {
+    var d = phase - 0.66;
+    if (Math.abs(d) > 0.11) return 0;
+    return Math.cos(d / 0.11 * Math.PI / 2);
+  }
+
+  function draw() {
+    var now = performance.now();
+    var phase = ((now - t0) % CYCLE) / CYCLE;
+    var beat = beatEnv(phase);
+    if (rasEl) rasEl.style.setProperty("--ras-beat", (1 + beat * 0.6).toFixed(3));
+
+    // 渐变底色（左青右橙）
+    var g = ctx.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, "#07182b"); g.addColorStop(0.5, "#0a0d16"); g.addColorStop(1, "#2a0f06");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // 中央对撞光带（攻击时增强）
+    var cg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.32);
+    cg.addColorStop(0, "rgba(255,255,255," + (0.10 + 0.12 * beat) + ")");
+    cg.addColorStop(0.5, "rgba(120,200,255," + (0.04 + 0.07 * beat) + ")");
+    cg.addColorStop(1, "transparent");
+    ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = "lighter";
+
+    // 角色攻击光晕：随 beat 从右侧(橙)与中央(白)亮起
+    if (beat > 0.02) {
+      var rg = ctx.createRadialGradient(W * 0.72, H * 0.52, 0, W * 0.72, H * 0.52, W * 0.30);
+      rg.addColorStop(0, "rgba(255,123,26," + (0.08 + 0.24 * beat) + ")");
+      rg.addColorStop(1, "transparent");
+      ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+      var fg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.22);
+      fg.addColorStop(0, "rgba(255,255,255," + (0.16 * beat) + ")");
+      fg.addColorStop(1, "transparent");
+      ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+    }
+
+    // 查克拉火焰粒子（橙）
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+      if (p.life <= 0 || p.y < -20) { particles.splice(i, 1); continue; }
+      var fl = p.flick * (0.7 + 0.3 * Math.sin(Date.now() / 120 + i));
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(" + p.color[0] + "," + p.color[1] + "," + p.color[2] + "," + (p.life * fl) + ")";
+      ctx.shadowBlur = 9 * DPR; ctx.shadowColor = "rgba(" + p.color[0] + "," + p.color[1] + "," + p.color[2] + ",0.9)";
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    // 一护斩月刀身灵压粒子（青）
+    for (var si = swordParticles.length - 1; si >= 0; si--) {
+      var sp = swordParticles[si];
+      sp.x += sp.vx; sp.y += sp.vy; sp.life -= sp.decay;
+      if (sp.life <= 0) { swordParticles.splice(si, 1); continue; }
+      var sfl = sp.flick * (0.7 + 0.3 * Math.sin(Date.now() / 110 + si));
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(" + sp.color[0] + "," + sp.color[1] + "," + sp.color[2] + "," + (sp.life * sfl) + ")";
+      ctx.shadowBlur = 10 * DPR; ctx.shadowColor = "rgba(46,230,255,0.9)";
+      ctx.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    // 能量波纹扩散（攻击爆发时触发）
+    for (var rp = ripples.length - 1; rp >= 0; rp--) {
+      var ri = ripples[rp];
+      ri.r += (ri.maxR - ri.r) * 0.07 + 2 * DPR;
+      ri.life -= ri.decay;
+      if (ri.life <= 0) { ripples.splice(rp, 1); continue; }
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(" + ri.color[0] + "," + ri.color[1] + "," + ri.color[2] + "," + (ri.life * 0.5) + ")";
+      ctx.lineWidth = 2.5 * DPR;
+      ctx.shadowBlur = 12 * DPR; ctx.shadowColor = "rgba(" + ri.color[0] + "," + ri.color[1] + "," + ri.color[2] + ",1)";
+      ctx.arc(ri.x, ri.y, ri.r, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    // 斩击光影（环境）
+    for (var s = slashes.length - 1; s >= 0; s--) {
+      var sl = slashes[s];
+      sl.life -= sl.decay; sl.x += sl.vx || 0;
+      if (sl.life <= 0) { slashes.splice(s, 1); continue; }
+      ctx.save();
+      ctx.translate(sl.x, sl.y); ctx.rotate(sl.angle);
+      var grad = ctx.createLinearGradient(-sl.len / 2, 0, sl.len / 2, 0);
+      grad.addColorStop(0, "transparent");
+      grad.addColorStop(0.5, "rgba(" + sl.color[0] + "," + sl.color[1] + "," + sl.color[2] + "," + (sl.life * 0.9) + ")");
+      grad.addColorStop(1, "transparent");
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = (2 + sl.life * 4) * DPR;
+      ctx.lineCap = "round";
+      ctx.shadowBlur = 14 * DPR; ctx.shadowColor = "rgba(" + sl.color[0] + "," + sl.color[1] + "," + sl.color[2] + ",1)";
+      ctx.beginPath(); ctx.moveTo(-sl.len / 2, 0); ctx.lineTo(sl.len / 2, 0); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = "source-over";
+
+    // 攻击事件：相位跨过 0.60 上升沿时，左右双向爆发 + 波纹
+    if (prevPhase < 0.60 && phase >= 0.60) {
+      spawnBurst(-1);
+      spawnBurst(1);
+      spawnRipple(W * 0.70, H * 0.52, W * 0.26, [255, 170, 60]);
+      spawnRipple(W / 2, H / 2, W * 0.22, [255, 255, 255]);
+    }
+    // 攻击期间粒子持续增密
+    var spawnRate = (isMobile ? 0.45 : 0.6) * (1 + beat * 1.4);
+    if (Math.random() < spawnRate) spawnParticle();
+    if (beat > 0.2 && Math.random() < 0.45 * beat) spawnParticle();
+    if (Math.random() < 0.006) spawnSlash();
+    // 斩月刀粒子（常驻，攻击时增密）
+    if (Math.random() < 0.55 + beat * 0.5) spawnSwordParticle();
+
+    prevPhase = phase;
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  /* 初始渲染 */
+  render();
+})();
+</script>
+</body>
+</html>
